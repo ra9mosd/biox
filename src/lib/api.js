@@ -195,3 +195,44 @@ export async function loadMyProfile(userId) {
     return null;
   }
 }
+export async function loadProfileByUsername(username) {
+  try {
+    const cleanUsername = username.replace('@', '').toLowerCase();
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, username, role, vip_expires')
+      .eq('username', cleanUsername)
+      .maybeSingle();
+    
+    if (!user) return null;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    if (!profile) return null;
+
+    const { data: links } = await supabase
+      .from('links')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('position');
+
+    const { data: badges } = await supabase
+      .from('badges')
+      .select('badge')
+      .eq('user_id', user.id);
+
+    return {
+      ...profile,
+      username: profile.display_username || `@${user.username}`,
+      links: links || [],
+      badges: badges?.map(b => b.badge) || [],
+    };
+  } catch (error) {
+    console.error('Ошибка загрузки профиля:', error);
+    return null;
+  }
+}
