@@ -90,8 +90,7 @@ useEffect(() => {
       let tgUser = tg?.initDataUnsafe?.user;
       
       // Проверяем start_param (username для просмотра профиля)
-      const startParam = tg?.initDataUnsafe?.start_param;
-      const isViewingProfile = startParam && startParam.length > 0;
+const startParam = tg?.initDataUnsafe?.start_param || tg?.initDataUnsafe?.startParam;      const isViewingProfile = startParam && startParam.length > 0;
       
       if (!tgUser) {
         console.log("⚠️ Открыто вне Telegram, используем тестового пользователя");
@@ -251,8 +250,7 @@ useEffect(() => {
     onClick={() => {
       const username = currentUser.username || `user${currentUser.id}`;
       const botUsername = "bioxbio_bot"; // ЗАМЕНИ!
-      const shareLink = `https://t.me/${botUsername}?start=${username}`;
-      
+const shareLink = `https://t.me/${botUsername}?startapp=${username}`;      
       if (window.Telegram?.WebApp) {
         window.Telegram.WebApp.openTelegramLink(shareLink);
       } else {
