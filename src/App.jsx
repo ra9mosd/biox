@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername } from "./lib/api";
 import "./App.css";
 
-const OWNER_ID = 123456789;
+const OWNER_ID = 8787840086;
 
 const defaultProfile = {
   name: "",
@@ -16,7 +16,7 @@ const defaultProfile = {
   music: "",
   musicTitle: "BIOX MUSIC",
   links: [{ name: "Telegram", url: "https://t.me/" }],
-  badges: ["DEVELOPER", "VERIFIED", "FOUNDER", "CREATOR", "PRO", "EARLY", "OG", "VIP", "SPONSOR"],
+  badges: [],
 };
 
 const badgeOptions = ["VERIFIED", "VIP", "SPONSOR", "FOUNDER", "PRO", "CREATOR", "DEVELOPER", "OG", "EARLY", "STAFF"];
@@ -87,20 +87,22 @@ function App() {
     const init = async () => {
       try {
         const tg = window.Telegram?.WebApp;
-        let tgUser = tg?.initDataUnsafe?.user;
+        const tgUser = tg?.initDataUnsafe?.user;
         const startParam = tg?.initDataUnsafe?.start_param;
         const isViewingProfile = startParam && startParam.length > 0;
 
+        // Если нет Telegram данных — показываем приветствие
         if (!tgUser) {
-          console.log("⚠️ Открыто вне Telegram, используем тестового пользователя");
-          tgUser = { id: OWNER_ID, username: "pashafloodwait", first_name: "Pasha", last_name: "Floodwait", photo_url: "" };
+          console.log("️ Нет Telegram данных");
+          setLoading(false);
+          return;
         }
 
-        console.log(" Telegram user:", tgUser);
+        console.log("👤 Telegram user:", tgUser);
         console.log("📱 Start param:", startParam);
 
         if (isViewingProfile) {
-          console.log("👀 Открываем профиль пользователя:", startParam);
+          console.log("👀 Открываем профиль:", startParam);
           const publicProfile = await loadProfileByUsername(startParam);
           if (publicProfile) {
             setProfile({
@@ -118,8 +120,6 @@ function App() {
               badges: publicProfile.badges.length > 0 ? publicProfile.badges : [],
             });
             setIsViewingMode(true);
-          } else {
-            console.log("❌ Профиль не найден:", startParam);
           }
         }
 
@@ -130,10 +130,11 @@ function App() {
         if (!isViewingMode) {
           const savedProfile = await loadMyProfile(user.id);
           console.log("📦 Загруженный профиль:", savedProfile);
+          
           if (savedProfile) {
             setProfile({
-              name: savedProfile.name || `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim(),
-              username: savedProfile.username || `@${user.username}`,
+              name: savedProfile.name || "",
+              username: savedProfile.username || (tgUser.username ? `@${tgUser.username}` : ""),
               bio: savedProfile.bio || "",
               avatar: savedProfile.avatar_url || tgUser.photo_url || "",
               banner: savedProfile.banner_url || "",
@@ -143,13 +144,15 @@ function App() {
               music: savedProfile.music_url || "",
               musicTitle: savedProfile.music_title || defaultProfile.musicTitle,
               links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : defaultProfile.links,
-              badges: savedProfile.badges.length > 0 ? savedProfile.badges : defaultProfile.badges,
+              badges: savedProfile.badges.length > 0 ? savedProfile.badges : [],
             });
           } else {
+            const fullName = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim();
+            const username = tgUser.username ? `@${tgUser.username}` : "";
             setProfile({
               ...defaultProfile,
-              name: `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || `User ${tgUser.id}`,
-              username: `@${user.username}`,
+              name: fullName,
+              username: username,
               avatar: tgUser.photo_url || "",
             });
           }
@@ -178,9 +181,7 @@ function App() {
     const originalValue = profile[field];
     update(field, "loading...");
     try {
-      console.log(`📤 Загрузка ${field}...`);
       const publicUrl = await uploadImage(file, currentUser.id, field);
-      console.log(`✅ Файл загружен: ${publicUrl}`);
       update(field, publicUrl);
     } catch (error) {
       console.error("❌ Ошибка загрузки:", error);
@@ -198,9 +199,7 @@ function App() {
     if (!currentUser) { alert("Пользователь не загружен!"); return; }
     setSaving(true);
     try {
-      console.log("💾 Сохранение профиля...");
       await saveProfile(currentUser.id, profile);
-      console.log("✅ Профиль сохранён!");
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
       const username = currentUser.username || `user${currentUser.id}`;
@@ -217,13 +216,35 @@ function App() {
     }
   };
 
+  const handleShare = () => {
+    if (!currentUser) { alert("Пользователь не загружен!"); return; }
+    const username = currentUser.username || `user${currentUser.id}`;
+    const profileUrl = `https://biox-zeta.vercel.app/u/${username}`;
+    navigator.clipboard.writeText(profileUrl);
+    alert(" Ссылка скопирована:\n" + profileUrl);
+  };
+
   const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
 
   if (loading) {
-    return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}></div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
+    return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}>⚡</div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
+  }
+
+  // Если нет Telegram — показываем приветствие
+  if (!currentUser) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505", flexDirection: "column", gap: "20px" }}>
+        <h1 style={{ fontSize: "48px" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></h1>
+        <p style={{ color: "#888", textAlign: "center", maxWidth: "400px" }}>
+          Откройте BIOX через Telegram бота<br/>
+          <a href="https://t.me/bioxbio_bot" style={{ color: "#8b5cf6", marginTop: "10px", display: "inline-block" }}>Открыть в Telegram →</a>
+        </p>
+      </div>
+    );
   }
 
   const tabs = ["PROFILE", "LINKS", "APPEARANCE", "BADGES"];
+  const isOwner = currentUser?.id === OWNER_ID;
 
   return (
     <div className={`app effect-${profile.effect}`} style={{ "--accent": profile.accent, "--mx": `${mouse.x}%`, "--my": `${mouse.y}%` }}>
@@ -235,9 +256,12 @@ function App() {
       <div className="grid-overlay" />
       <header className="topbar">
         <div className="brand"><span>BIO</span>X</div>
-        <div className="top-status"><span className="status-dot" />{isViewingMode ? "PUBLIC PROFILE" : (currentUser?.id === OWNER_ID ? "OWNER MODE" : "CLOUD PROFILE")}</div>
+        <div className="top-status"><span className="status-dot" />{isViewingMode ? "PUBLIC PROFILE" : (isOwner ? "OWNER MODE" : "CLOUD PROFILE")}</div>
         {!isViewingMode && (
-          <button className="save-top" onClick={handleSave} disabled={saving}>{saving ? "SAVING..." : saved ? "SAVED ✓" : "SAVE PROFILE"}</button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button className="save-top" onClick={handleShare} style={{ background: "#8b5cf6", color: "#fff" }}>ПОДЕЛИТЬСЯ</button>
+            <button className="save-top" onClick={handleSave} disabled={saving}>{saving ? "SAVING..." : saved ? "SAVED ✓" : "SAVE PROFILE"}</button>
+          </div>
         )}
       </header>
       {!isViewingMode && (
@@ -259,12 +283,19 @@ function App() {
                   <div><strong>AVATAR</strong><span>PNG / JPG / GIF</span><span>MAX 15 MB</span></div>
                 </div>
                 <label className="field"><span>DISPLAY NAME</span><input value={profile.name} onChange={e => update("name", e.target.value)} placeholder="Your name" /></label>
-                <label className="field"><span>USERNAME (из Telegram, уникальный)</span><input value={profile.username} readOnly style={{ opacity: 0.6, cursor: "not-allowed" }} placeholder="@username" /></label>
+                <label className="field"><span>USERNAME (из Telegram)</span>
+                  <input 
+                    value={profile.username} 
+                    readOnly
+                    style={{ opacity: 0.6, cursor: "not-allowed" }}
+                    placeholder="@username"
+                  />
+                </label>
                 <label className="field"><span>BIO</span><textarea value={profile.bio} onChange={e => update("bio", e.target.value)} placeholder="Tell something about yourself..." /></label>
               </>}
               {activeTab === "LINKS" && <>
                 <div className="panel-title"><span>02</span>CUSTOM LINKS</div>
-                <p className="panel-description">Добавляй сколько угодно ссылок. Они появятся на твоём профиле автоматически.</p>
+                <p className="panel-description">Добавляй сколько угодно ссылок.</p>
                 <div className="links-editor">
                   {profile.links.map((link, i) => <div className="link-row" key={i}>
                     <div className="link-number">{String(i + 1).padStart(2, "0")}</div>
@@ -288,7 +319,7 @@ function App() {
               </>}
               {activeTab === "BADGES" && <>
                 <div className="panel-title"><span>04</span>BADGES</div>
-                <p className="panel-description">Выбирай бейджи. На профиле они отображаются маленькими премиальными иконками рядом с именем.</p>
+                <p className="panel-description">Выбирай бейджи.</p>
                 <div className="badge-selector">
                   {badgeOptions.map(badge => {
                     const active = profile.badges.includes(badge);
