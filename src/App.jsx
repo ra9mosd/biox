@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername } from "./lib/api";
 import "./App.css";
 
-const OWNER_ID = 123456789;
+const OWNER_ID = 123456789; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ TELEGRAM ID
 
 const defaultProfile = {
   name: "",
@@ -15,7 +15,7 @@ const defaultProfile = {
   effect: "aurora",
   music: "",
   musicTitle: "BIOX MUSIC",
-  links: [{ name: "Telegram", url: "https://t.me/" }],
+  links: [],
   badges: [],
 };
 
@@ -91,7 +91,7 @@ function App() {
         const startParam = tg?.initDataUnsafe?.start_param;
         const isViewingProfile = startParam && startParam.length > 0;
 
-        // Если нет Telegram — создаём локального пользователя
+        // Если нет Telegram — создаём локального пользователя с пустым username
         if (!tgUser || !tgUser.id) {
           const localId = "local_" + Math.random().toString(36).substr(2, 9);
           tgUser = {
@@ -105,6 +105,7 @@ function App() {
 
         console.log("👤 User:", tgUser);
 
+        // Если открыли /u/username — показываем публичный профиль
         if (isViewingProfile) {
           console.log("👀 Открываем профиль:", startParam);
           const publicProfile = await loadProfileByUsername(startParam);
@@ -129,14 +130,17 @@ function App() {
           }
         }
 
+        // Регистрируем/находим пользователя в БД
         const user = await ensureUser(tgUser);
         console.log("✅ Пользователь в БД:", user);
         setCurrentUser(user);
 
+        // Загружаем сохранённый профиль
         const savedProfile = await loadMyProfile(user.id);
-        console.log("📦 Загруженный профиль:", savedProfile);
+        console.log(" Загруженный профиль:", savedProfile);
         
         if (savedProfile) {
+          // Если профиль уже сохранён — показываем его
           setProfile({
             name: savedProfile.name || "",
             username: savedProfile.username || (tgUser.username ? `@${tgUser.username}` : ""),
@@ -148,22 +152,26 @@ function App() {
             effect: savedProfile.effect || defaultProfile.effect,
             music: savedProfile.music_url || "",
             musicTitle: savedProfile.music_title || defaultProfile.musicTitle,
-            links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : defaultProfile.links,
+            links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : [],
             badges: savedProfile.badges.length > 0 ? savedProfile.badges : [],
           });
         } else {
-          const fullName = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim();
+          // Новый пользователь — ТОЛЬКО username из Telegram, всё остальное пустое
           const username = tgUser.username ? `@${tgUser.username}` : "";
           setProfile({
             ...defaultProfile,
-            name: fullName,
+            name: "",
             username: username,
-            avatar: tgUser.photo_url || "",
+            bio: "",
+            avatar: "",
+            banner: "",
+            background: "",
+            links: [],
             badges: [],
           });
         }
       } catch (error) {
-        console.error("❌ Ошибка инициализации:", error);
+        console.error(" Ошибка инициализации:", error);
       } finally {
         setLoading(false);
       }
@@ -226,7 +234,7 @@ function App() {
     const username = currentUser.username || `user${currentUser.id}`;
     const profileUrl = `https://biox-zeta.vercel.app/u/${username}`;
     navigator.clipboard.writeText(profileUrl);
-    alert("📋 Ссылка скопирована:\n" + profileUrl);
+    alert(" Ссылка скопирована:\n" + profileUrl);
   };
 
   const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
@@ -278,7 +286,7 @@ function App() {
                   <div><strong>AVATAR</strong><span>PNG / JPG / GIF</span><span>MAX 15 MB</span></div>
                 </div>
                 <label className="field"><span>DISPLAY NAME</span><input value={profile.name} onChange={e => update("name", e.target.value)} placeholder="Your name" /></label>
-                <label className="field"><span>USERNAME</span>
+                <label className="field"><span>USERNAME (из Telegram)</span>
                   <input 
                     value={profile.username} 
                     readOnly
@@ -335,7 +343,7 @@ function App() {
                 </div>
                 <div className="profile-body">
                   <div className="profile-avatar">
-                    {profile.avatar && profile.avatar !== "loading..." ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "B"}</div>}
+                    {profile.avatar && profile.avatar !== "loading..." ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</div>}
                   </div>
                   <div className="profile-info">
                     <div className="name-line"><h2>{profile.name || "Your Name"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
@@ -361,7 +369,7 @@ function App() {
             </div>
             <div className="profile-body">
               <div className="profile-avatar">
-                {profile.avatar ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "B"}</div>}
+                {profile.avatar ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</div>}
               </div>
               <div className="profile-info">
                 <div className="name-line"><h2>{profile.name || "User"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
