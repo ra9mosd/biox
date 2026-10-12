@@ -197,3 +197,35 @@ export async function loadMyProfile(userId) {
     return null;
   }
  }
+ export async function checkUsername(username) {
+  try {
+    const cleanUsername = username.replace('@', '').toLowerCase().trim();
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', cleanUsername)
+      .maybeSingle();
+    
+    if (error) throw error;
+    return { available: !data, username: cleanUsername };
+  } catch (error) {
+    console.error('Ошибка проверки username:', error);
+    return { available: false, username: cleanUsername };
+  }
+}
+
+export async function setUsername(userId, username) {
+  try {
+    const cleanUsername = username.replace('@', '').toLowerCase().trim();
+    const { error } = await supabase
+      .from('users')
+      .update({ username: cleanUsername })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    return { success: true, username: cleanUsername };
+  } catch (error) {
+    console.error('Ошибка установки username:', error);
+    return { success: false, error: error.message };
+  }
+}
