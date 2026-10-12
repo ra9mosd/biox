@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername, checkUsername, setUsername } from "./lib/api";
+import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername } from "./lib/api";
 import "./App.css";
 
 const OWNER_ID = 8787840086;
 
 const defaultProfile = {
   name: "",
-  username: "",
   bio: "",
   avatar: "",
   banner: "",
@@ -82,10 +81,6 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [mouse, setMouse] = useState({ x: 50, y: 50 });
   const [isViewingMode, setIsViewingMode] = useState(false);
-  const [needsUsername, setNeedsUsername] = useState(false);
-  const [usernameInput, setUsernameInput] = useState("");
-  const [usernameError, setUsernameError] = useState("");
-  const [usernameChecking, setUsernameChecking] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -114,7 +109,6 @@ function App() {
           if (publicProfile) {
             setProfile({
               name: publicProfile.name || "User",
-              username: publicProfile.username || `@${startParam}`,
               bio: publicProfile.bio || "",
               avatar: publicProfile.avatar_url || "",
               banner: publicProfile.banner_url || "",
@@ -136,20 +130,12 @@ function App() {
         console.log("✅ Пользователь в БД:", user);
         setCurrentUser(user);
 
-        if (!user.username || user.username.startsWith('user')) {
-          console.log("⚠️ Нет username, показываем форму ввода");
-          setNeedsUsername(true);
-          setLoading(false);
-          return;
-        }
-
         const savedProfile = await loadMyProfile(user.id);
         console.log("📦 Загруженный профиль:", savedProfile);
         
         if (savedProfile) {
           setProfile({
             name: savedProfile.name || "",
-            username: savedProfile.username || `@${user.username}`,
             bio: savedProfile.bio || "",
             avatar: savedProfile.avatar_url || tgUser.photo_url || "",
             banner: savedProfile.banner_url || "",
@@ -164,7 +150,6 @@ function App() {
         } else {
           setProfile({
             ...defaultProfile,
-            username: `@${user.username}`,
           });
         }
       } catch (error) {
@@ -181,52 +166,6 @@ function App() {
     window.addEventListener("mousemove", move);
     return () => window.removeEventListener("mousemove", move);
   }, []);
-
-  const handleUsernameChange = (value) => {
-    setUsernameInput(value);
-    setUsernameError("");
-  };
-
-  const handleUsernameSubmit = async () => {
-    const cleanUsername = usernameInput.replace('@', '').trim().toLowerCase();
-    
-    if (cleanUsername.length < 3) {
-      setUsernameError("Минимум 3 символа");
-      return;
-    }
-    
-    if (cleanUsername.length > 20) {
-      setUsernameError("Максимум 20 символов");
-      return;
-    }
-    
-    if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-      setUsernameError("Только буквы, цифры и _");
-      return;
-    }
-
-    setUsernameChecking(true);
-    
-    const { available } = await checkUsername(cleanUsername);
-    
-    if (!available) {
-      setUsernameError("Этот username уже занят");
-      setUsernameChecking(false);
-      return;
-    }
-
-    const result = await setUsername(currentUser.id, cleanUsername);
-    
-    if (result.success) {
-      setProfile(prev => ({ ...prev, username: `@${cleanUsername}` }));
-      setCurrentUser(prev => ({ ...prev, username: cleanUsername }));
-      setNeedsUsername(false);
-    } else {
-      setUsernameError("Ошибка: " + result.error);
-    }
-    
-    setUsernameChecking(false);
-  };
 
   const backgroundStyle = useMemo(() => profile.background ? { backgroundImage: `url(${profile.background})` } : {}, [profile.background]);
   const update = (field, value) => setProfile(c => ({ ...c, [field]: value }));
@@ -258,12 +197,6 @@ function App() {
       await saveProfile(currentUser.id, profile);
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
-      const username = currentUser.username || `user${currentUser.id}`;
-      const profileUrl = `https://biox-zeta.vercel.app/u/${username}`;
-      if (window.confirm(`✅ Профиль сохранён!\n\nТвоя ссылка:\n${profileUrl}\n\nСкопировать ссылку?`)) {
-        await navigator.clipboard.writeText(profileUrl);
-        alert("📋 Ссылка скопирована!");
-      }
     } catch (error) {
       console.error("❌ Ошибка сохранения:", error);
       alert("Ошибка сохранения: " + error.message);
@@ -272,69 +205,10 @@ function App() {
     }
   };
 
-  const handleShare = () => {
-    if (!currentUser) { alert("Пользователь не загружен!"); return; }
-    const username = currentUser.username || `user${currentUser.id}`;
-    const profileUrl = `https://biox-zeta.vercel.app/u/${username}`;
-    navigator.clipboard.writeText(profileUrl);
-    alert("📋 Ссылка скопирована:\n" + profileUrl);
-  };
-
   const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
 
   if (loading) {
     return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}>⚡</div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
-  }
-
-  if (needsUsername) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505", flexDirection: "column", gap: "20px", padding: "20px" }}>
-        <h1 style={{ fontSize: "48px" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></h1>
-        <p style={{ color: "#888", textAlign: "center", maxWidth: "400px" }}>
-          Выбери уникальный username<br/>
-          <span style={{ fontSize: "12px", color: "#666" }}>Его нельзя будет изменить</span>
-        </p>
-        <div style={{ position: "relative" }}>
-          <span style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", color: "#888", fontSize: "16px" }}>@</span>
-          <input
-            type="text"
-            value={usernameInput}
-            onChange={(e) => handleUsernameChange(e.target.value)}
-            placeholder="username"
-            onKeyDown={(e) => e.key === 'Enter' && handleUsernameSubmit()}
-            style={{
-              padding: "12px 20px 12px 35px",
-              background: "#111",
-              border: "1px solid #333",
-              borderRadius: "8px",
-              color: "#fff",
-              fontSize: "16px",
-              width: "280px",
-              textAlign: "left"
-            }}
-          />
-        </div>
-        {usernameError && (
-          <p style={{ color: "#ef4444", fontSize: "14px", margin: 0 }}>{usernameError}</p>
-        )}
-        <button
-          onClick={handleUsernameSubmit}
-          disabled={usernameChecking}
-          style={{
-            padding: "12px 30px",
-            background: usernameChecking ? "#555" : "#8b5cf6",
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "16px",
-            fontWeight: "700",
-            cursor: usernameChecking ? "not-allowed" : "pointer"
-          }}
-        >
-          {usernameChecking ? "Проверка..." : "Подтвердить"}
-        </button>
-      </div>
-    );
   }
 
   const tabs = ["PROFILE", "LINKS", "APPEARANCE", "BADGES"];
@@ -355,10 +229,7 @@ function App() {
           {isViewingMode ? "PUBLIC PROFILE" : (isOwner ? "OWNER MODE" : "CLOUD PROFILE")}
         </div>
         {!isViewingMode && (
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button className="save-top" onClick={handleShare} style={{ background: "#8b5cf6", color: "#fff" }}>ПОДЕЛИТЬСЯ</button>
-            <button className="save-top" onClick={handleSave} disabled={saving}>{saving ? "SAVING..." : saved ? "SAVED ✓" : "SAVE PROFILE"}</button>
-          </div>
+          <button className="save-top" onClick={handleSave} disabled={saving}>{saving ? "SAVING..." : saved ? "SAVED ✓" : "SAVE PROFILE"}</button>
         )}
       </header>
       {!isViewingMode && (
@@ -380,14 +251,6 @@ function App() {
                   <div><strong>AVATAR</strong><span>PNG / JPG / GIF</span><span>MAX 15 MB</span></div>
                 </div>
                 <label className="field"><span>DISPLAY NAME</span><input value={profile.name} onChange={e => update("name", e.target.value)} placeholder="Your name" /></label>
-                <label className="field"><span>USERNAME (нельзя изменить)</span>
-                  <input 
-                    value={profile.username} 
-                    readOnly
-                    style={{ opacity: 0.6, cursor: "not-allowed" }}
-                    placeholder="@username"
-                  />
-                </label>
                 <label className="field"><span>BIO</span><textarea value={profile.bio} onChange={e => update("bio", e.target.value)} placeholder="Tell something about yourself..." /></label>
               </>}
               {activeTab === "LINKS" && <>
@@ -441,7 +304,6 @@ function App() {
                   </div>
                   <div className="profile-info">
                     <div className="name-line"><h2>{profile.name || "Your Name"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
-                    <div className="profile-username">{profile.username || "@username"}</div>
                     <p className="profile-bio">{profile.bio || "Your bio goes here"}</p>
                   </div>
                   <div className="profile-divider" />
@@ -467,7 +329,6 @@ function App() {
               </div>
               <div className="profile-info">
                 <div className="name-line"><h2>{profile.name || "User"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
-                <div className="profile-username">{profile.username || "@username"}</div>
                 <p className="profile-bio">{profile.bio || ""}</p>
               </div>
               <div className="profile-divider" />
