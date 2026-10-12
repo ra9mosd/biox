@@ -109,7 +109,6 @@ export async function loadProfileByUsername(username) {
 
 export async function ensureUser(tgUser) {
   try {
-    const username = (tgUser.username || `user${tgUser.id}`).toLowerCase();
     const { data: existing } = await supabase
       .from('users')
       .select('id, role, vip_expires, username')
@@ -121,25 +120,15 @@ export async function ensureUser(tgUser) {
         id: existing.id,
         role: existing.role,
         vipExpires: existing.vip_expires,
-        username: existing.username || username,
+        username: existing.username || null,
       };
     }
-
-    const { data: usernameTaken } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .maybeSingle();
-
-    const finalUsername = usernameTaken
-      ? `${username}${tgUser.id}`
-      : username;
 
     const { data: newUser, error } = await supabase
       .from('users')
       .insert({
         id: tgUser.id,
-        username: finalUsername,
+        username: null,
         first_name: tgUser.first_name,
         role: 'free',
       })
@@ -148,17 +137,11 @@ export async function ensureUser(tgUser) {
 
     if (error) throw error;
 
-    await supabase.from('profiles').insert({
-      user_id: tgUser.id,
-      name: tgUser.first_name || '',
-      display_username: `@${finalUsername}`,
-    });
-
     return {
       id: newUser.id,
       role: newUser.role,
       vipExpires: newUser.vip_expires,
-      username: finalUsername,
+      username: null,
     };
   } catch (error) {
     console.error('Ошибка регистрации пользователя:', error);
@@ -196,8 +179,9 @@ export async function loadMyProfile(userId) {
     console.error('Ошибка загрузки профиля:', error);
     return null;
   }
- }
- export async function checkUsername(username) {
+}
+
+export async function checkUsername(username) {
   try {
     const cleanUsername = username.replace('@', '').toLowerCase().trim();
     const { data, error } = await supabase

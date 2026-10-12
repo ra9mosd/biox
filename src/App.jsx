@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername, checkUsername, setUsername } from "./lib/api";
 import "./App.css";
 
-const OWNER_ID = 8787840086; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ TELEGRAM ID
+const OWNER_ID = 8787840086;
 
 const defaultProfile = {
   name: "",
@@ -95,7 +95,6 @@ function App() {
         const startParam = tg?.initDataUnsafe?.start_param;
         const isViewingProfile = startParam && startParam.length > 0;
 
-        // Если нет Telegram — создаём локального пользователя
         if (!tgUser || !tgUser.id) {
           const localId = "local_" + Math.random().toString(36).substr(2, 9);
           tgUser = {
@@ -109,7 +108,6 @@ function App() {
 
         console.log("👤 User:", tgUser);
 
-        // Если открыли /u/username — показываем публичный профиль
         if (isViewingProfile) {
           console.log("👀 Открываем профиль:", startParam);
           const publicProfile = await loadProfileByUsername(startParam);
@@ -134,20 +132,17 @@ function App() {
           }
         }
 
-        // Регистрируем/находим пользователя в БД
         const user = await ensureUser(tgUser);
         console.log("✅ Пользователь в БД:", user);
         setCurrentUser(user);
 
-        // Проверяем есть ли у пользователя username
-        if (!user.username) {
+        if (!user.username || user.username.startsWith('user')) {
           console.log("⚠️ Нет username, показываем форму ввода");
           setNeedsUsername(true);
           setLoading(false);
           return;
         }
 
-        // Загружаем сохранённый профиль
         const savedProfile = await loadMyProfile(user.id);
         console.log("📦 Загруженный профиль:", savedProfile);
         
@@ -187,7 +182,6 @@ function App() {
     return () => window.removeEventListener("mousemove", move);
   }, []);
 
-  // Обработка ввода username с проверкой уникальности
   const handleUsernameChange = (value) => {
     setUsernameInput(value);
     setUsernameError("");
@@ -213,7 +207,6 @@ function App() {
 
     setUsernameChecking(true);
     
-    // Проверяем уникальность
     const { available } = await checkUsername(cleanUsername);
     
     if (!available) {
@@ -222,7 +215,6 @@ function App() {
       return;
     }
 
-    // Сохраняем username
     const result = await setUsername(currentUser.id, cleanUsername);
     
     if (result.success) {
@@ -273,7 +265,7 @@ function App() {
         alert("📋 Ссылка скопирована!");
       }
     } catch (error) {
-      console.error(" Ошибка сохранения:", error);
+      console.error("❌ Ошибка сохранения:", error);
       alert("Ошибка сохранения: " + error.message);
     } finally {
       setSaving(false);
@@ -291,10 +283,9 @@ function App() {
   const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
 
   if (loading) {
-    return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}></div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
+    return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}>⚡</div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
   }
 
-  // Форма ввода username
   if (needsUsername) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505", flexDirection: "column", gap: "20px", padding: "20px" }}>
