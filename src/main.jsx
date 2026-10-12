@@ -2,11 +2,18 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import PublicProfile from './PublicProfile.jsx';
+import AdminPanel from './AdminPanel.jsx';
 import './App.css';
 
 const path = window.location.pathname;
 
-if (path.startsWith('/u/')) {
+if (path.startsWith('/admin')) {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <AdminPanel />
+    </React.StrictMode>,
+  );
+} else if (path.startsWith('/u/')) {
   const username = path.split('/u/')[1];
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>

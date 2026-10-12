@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername } from "./lib/api";
 import "./App.css";
 
-const OWNER_ID = 8787840086;
+const OWNER_ID = 123456789;
 
 const defaultProfile = {
   name: "",
@@ -87,19 +87,23 @@ function App() {
     const init = async () => {
       try {
         const tg = window.Telegram?.WebApp;
-        const tgUser = tg?.initDataUnsafe?.user;
+        let tgUser = tg?.initDataUnsafe?.user;
         const startParam = tg?.initDataUnsafe?.start_param;
         const isViewingProfile = startParam && startParam.length > 0;
 
-        // Если нет Telegram данных — показываем приветствие
-        if (!tgUser) {
-          console.log("️ Нет Telegram данных");
-          setLoading(false);
-          return;
+        // Если нет Telegram — создаём локального пользователя
+        if (!tgUser || !tgUser.id) {
+          const localId = "local_" + Math.random().toString(36).substr(2, 9);
+          tgUser = {
+            id: localId,
+            username: null,
+            first_name: "",
+            last_name: "",
+            photo_url: "",
+          };
         }
 
-        console.log("👤 Telegram user:", tgUser);
-        console.log("📱 Start param:", startParam);
+        console.log("👤 User:", tgUser);
 
         if (isViewingProfile) {
           console.log("👀 Открываем профиль:", startParam);
@@ -120,6 +124,8 @@ function App() {
               badges: publicProfile.badges.length > 0 ? publicProfile.badges : [],
             });
             setIsViewingMode(true);
+            setLoading(false);
+            return;
           }
         }
 
@@ -127,35 +133,34 @@ function App() {
         console.log("✅ Пользователь в БД:", user);
         setCurrentUser(user);
 
-        if (!isViewingMode) {
-          const savedProfile = await loadMyProfile(user.id);
-          console.log("📦 Загруженный профиль:", savedProfile);
-          
-          if (savedProfile) {
-            setProfile({
-              name: savedProfile.name || "",
-              username: savedProfile.username || (tgUser.username ? `@${tgUser.username}` : ""),
-              bio: savedProfile.bio || "",
-              avatar: savedProfile.avatar_url || tgUser.photo_url || "",
-              banner: savedProfile.banner_url || "",
-              background: savedProfile.background_url || "",
-              accent: savedProfile.accent || defaultProfile.accent,
-              effect: savedProfile.effect || defaultProfile.effect,
-              music: savedProfile.music_url || "",
-              musicTitle: savedProfile.music_title || defaultProfile.musicTitle,
-              links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : defaultProfile.links,
-              badges: savedProfile.badges.length > 0 ? savedProfile.badges : [],
-            });
-          } else {
-            const fullName = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim();
-            const username = tgUser.username ? `@${tgUser.username}` : "";
-            setProfile({
-              ...defaultProfile,
-              name: fullName,
-              username: username,
-              avatar: tgUser.photo_url || "",
-            });
-          }
+        const savedProfile = await loadMyProfile(user.id);
+        console.log("📦 Загруженный профиль:", savedProfile);
+        
+        if (savedProfile) {
+          setProfile({
+            name: savedProfile.name || "",
+            username: savedProfile.username || (tgUser.username ? `@${tgUser.username}` : ""),
+            bio: savedProfile.bio || "",
+            avatar: savedProfile.avatar_url || tgUser.photo_url || "",
+            banner: savedProfile.banner_url || "",
+            background: savedProfile.background_url || "",
+            accent: savedProfile.accent || defaultProfile.accent,
+            effect: savedProfile.effect || defaultProfile.effect,
+            music: savedProfile.music_url || "",
+            musicTitle: savedProfile.music_title || defaultProfile.musicTitle,
+            links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : defaultProfile.links,
+            badges: savedProfile.badges.length > 0 ? savedProfile.badges : [],
+          });
+        } else {
+          const fullName = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim();
+          const username = tgUser.username ? `@${tgUser.username}` : "";
+          setProfile({
+            ...defaultProfile,
+            name: fullName,
+            username: username,
+            avatar: tgUser.photo_url || "",
+            badges: [],
+          });
         }
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
@@ -176,7 +181,7 @@ function App() {
   const update = (field, value) => setProfile(c => ({ ...c, [field]: value }));
 
   const uploadFile = async (field, file) => {
-    if (!file || !currentUser) { if (!currentUser) alert("Пользователь не загружен"); return; }
+    if (!file || !currentUser) { alert("Пользователь не загружен"); return; }
     if (file.size > 15 * 1024 * 1024) { alert("Максимум 15 MB"); return; }
     const originalValue = profile[field];
     update(field, "loading...");
@@ -221,7 +226,7 @@ function App() {
     const username = currentUser.username || `user${currentUser.id}`;
     const profileUrl = `https://biox-zeta.vercel.app/u/${username}`;
     navigator.clipboard.writeText(profileUrl);
-    alert(" Ссылка скопирована:\n" + profileUrl);
+    alert("📋 Ссылка скопирована:\n" + profileUrl);
   };
 
   const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
@@ -230,21 +235,8 @@ function App() {
     return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}>⚡</div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
   }
 
-  // Если нет Telegram — показываем приветствие
-  if (!currentUser) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505", flexDirection: "column", gap: "20px" }}>
-        <h1 style={{ fontSize: "48px" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></h1>
-        <p style={{ color: "#888", textAlign: "center", maxWidth: "400px" }}>
-          Откройте BIOX через Telegram бота<br/>
-          <a href="https://t.me/bioxbio_bot" style={{ color: "#8b5cf6", marginTop: "10px", display: "inline-block" }}>Открыть в Telegram →</a>
-        </p>
-      </div>
-    );
-  }
-
   const tabs = ["PROFILE", "LINKS", "APPEARANCE", "BADGES"];
-  const isOwner = currentUser?.id === OWNER_ID;
+  const isOwner = Number(currentUser?.id) === Number(OWNER_ID);
 
   return (
     <div className={`app effect-${profile.effect}`} style={{ "--accent": profile.accent, "--mx": `${mouse.x}%`, "--my": `${mouse.y}%` }}>
@@ -256,7 +248,10 @@ function App() {
       <div className="grid-overlay" />
       <header className="topbar">
         <div className="brand"><span>BIO</span>X</div>
-        <div className="top-status"><span className="status-dot" />{isViewingMode ? "PUBLIC PROFILE" : (isOwner ? "OWNER MODE" : "CLOUD PROFILE")}</div>
+        <div className="top-status">
+          <span className="status-dot" />
+          {isViewingMode ? "PUBLIC PROFILE" : (isOwner ? "OWNER MODE" : "CLOUD PROFILE")}
+        </div>
         {!isViewingMode && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button className="save-top" onClick={handleShare} style={{ background: "#8b5cf6", color: "#fff" }}>ПОДЕЛИТЬСЯ</button>
@@ -283,7 +278,7 @@ function App() {
                   <div><strong>AVATAR</strong><span>PNG / JPG / GIF</span><span>MAX 15 MB</span></div>
                 </div>
                 <label className="field"><span>DISPLAY NAME</span><input value={profile.name} onChange={e => update("name", e.target.value)} placeholder="Your name" /></label>
-                <label className="field"><span>USERNAME (из Telegram)</span>
+                <label className="field"><span>USERNAME</span>
                   <input 
                     value={profile.username} 
                     readOnly
@@ -348,7 +343,7 @@ function App() {
                     <p className="profile-bio">{profile.bio || "Your bio goes here"}</p>
                   </div>
                   <div className="profile-divider" />
-                  <div className="preview-links">{profile.links.map((link, i) => <a key={`${link.name}-${i}`} href={normalizeUrl(link.url)} target="_blank" rel="noreferrer" className="preview-link"><span className="link-icon">{link.name?.charAt(0)?.toUpperCase() || "↗"}</span><span>{link.name || "Link"}</span><span className="link-arrow">↗</span></a>)}</div>
+                  <div className="preview-links">{profile.links.map((link, i) => <a key={`${link.name}-${i}`} href={normalizeUrl(link.url)} target="_blank" rel="noreferrer" className="preview-link"><span className="link-icon">{link.name?.charAt(0)?.toUpperCase() || ""}</span><span>{link.name || "Link"}</span><span className="link-arrow">↗</span></a>)}</div>
                   {profile.music && <div className="music-player"><div className="music-top"><div className="music-icon">♫</div><div><span>NOW PLAYING</span><strong>{profile.musicTitle || "BIOX MUSIC"}</strong></div><div className="music-pulse"><i /><i /><i /><i /><i /></div></div><audio controls src={profile.music} /></div>}
                   <div className="profile-footer"><span>BIOX</span><span>PERSONAL DIGITAL IDENTITY</span></div>
                 </div>
