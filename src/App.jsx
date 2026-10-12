@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername, checkUsername, setUsername } from "./lib/api";
 import "./App.css";
 
-const OWNER_ID = 123456789; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ TELEGRAM ID
+const OWNER_ID = 8787840086; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ TELEGRAM ID
 
 const defaultProfile = {
   name: "",
