@@ -56,10 +56,10 @@ async function readProfile(db,id) {
   ]);
   if(p.error) throw p.error; if(l.error) throw l.error; if(b.error) throw b.error;
   const x=p.data||{};
-  return {...x,user_id:id,name:x.name||'',username:x.display_username||'',bio:x.bio||'',avatar:x.avatar_url||'',banner:x.banner_url||'',background:x.background_url||'',accent:x.accent||'#8b5cf6',effect:x.effect||'aurora',music:x.music_url||'',musicTitle:x.music_title||'BIOX MUSIC',links:l.data||[],badges:(b.data||[]).map(v=>v.badge)};
+  return {...x,user_id:id,name:x.name||'',username:x.display_username||'',bio:x.bio||'',avatar:x.avatar_url||'',banner:x.banner_url||'',background:x.background_url||'',cardColor:x.background_color||'#111019',accent:x.accent||'#8b5cf6',effect:x.effect||'aurora',music:x.music_url||'',musicTitle:x.music_title||'BIOX MUSIC',links:l.data||[],badges:(b.data||[]).map(v=>v.badge)};
 }
 async function saveOwn(db,id,input) {
-  const row={user_id:id,name:txt(input.name,80),display_username:txt(input.username,64),bio:txt(input.bio,500),avatar_url:url(input.avatar),banner_url:url(input.banner),background_url:url(input.background),accent:/^#[0-9a-fA-F]{6}$/.test(input.accent||'')?input.accent:'#8b5cf6',effect:['aurora','glow','matrix','none'].includes(input.effect)?input.effect:'aurora',music_url:url(input.music),music_title:txt(input.musicTitle,100)||'BIOX MUSIC',updated_at:new Date().toISOString()};
+  const row={user_id:id,name:txt(input.name,80),display_username:txt(input.username,64).replace(/^@/,'').toLowerCase(),bio:txt(input.bio,500),avatar_url:url(input.avatar),banner_url:url(input.banner),background_url:url(input.background),background_color:/^#[0-9a-fA-F]{6}$/.test(input.cardColor||'')?input.cardColor:'#111019',accent:/^#[0-9a-fA-F]{6}$/.test(input.accent||'')?input.accent:'#8b5cf6',effect:['aurora','glow','matrix','none'].includes(input.effect)?input.effect:'aurora',music_url:url(input.music),music_title:txt(input.musicTitle,100)||'BIOX MUSIC',updated_at:new Date().toISOString()};
   const {error}=await db.from('profiles').upsert(row,{onConflict:'user_id'}); if(error) throw error;
   const links=Array.isArray(input.links)?input.links.slice(0,20).map((x,i)=>({user_id:id,name:txt(x?.name,40),url:url(x?.url),position:i})).filter(x=>x.name&&x.url):[];
   const del=await db.from('links').delete().eq('user_id',id); if(del.error) throw del.error;
@@ -69,22 +69,44 @@ async function saveOwn(db,id,input) {
 export default async function handler(req,res) {
   if(req.method!=='POST') return response(res,405,{error:'Только POST'});
   try {
+    const action=req.body?.action;
+    const db=client();
+    if(action==='public-profile') {
+      const username=txt(req.body.username,64).replace(/^@/,'').toLowerCase();
+      if(!username)return response(res,400,{error:'Введи username BIOX.'});
+      const {data:publicProfile,error:profileError}=await db.from('profiles').select('user_id').ilike('display_username',username).maybeSingle();
+      if(profileError)throw profileError;
+      let target=null;
+      if(publicProfile){const found=await db.from('users').select('id,username,role,vip_expires').eq('id',publicProfile.user_id).maybeSingle();if(found.error)throw found.error;target=found.data;}
+      if(!target){const found=await db.from('users').select('id,username,role,vip_expires').eq('username',username).maybeSingle();if(found.error)throw found.error;target=found.data;}
+      if(!target)return response(res,404,{error:'Пользователь не найден.'});
+      return response(res,200,{profile:{...(await readProfile(db,String(target.id))),role:target.role,vipExpires:target.vip_expires,telegramUsername:target.username}});
+    }
     const tg=verifyInitData(req.headers['x-telegram-init-data']||req.body?.initData);
-    const db=client(), user=await ensureUser(db,tg), action=req.body?.action;
+    const user=await ensureUser(db,tg);
     if(action==='bootstrap') {
       const profile=await readProfile(db,tg.id);
       return response(res,200,{user:{id:tg.id,role:tg.id===OWNER_ID?'owner':user.role,vipExpires:user.vip_expires,telegramUsername:tg.username},profile});
     }
+    if(action==='upload-image') {
+      const field=req.body?.field;
+      if(!['avatar','banner','background'].includes(field))return response(res,400,{error:'Недопустимый тип изображения.'});
+      const dataUrl=String(req.body?.dataUrl||'');
+      const match=dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+      if(!match)return response(res,400,{error:'Выбери PNG, JPG, WEBP или GIF.'});
+      const buffer=Buffer.from(match[2],'base64');
+      if(!buffer.length||buffer.length>3*1024*1024)return response(res,413,{error:'Изображение должно быть до 3 МБ.'});
+      const ext=({'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'})[match[1]];
+      const path=`${tg.id}/${field}-${Date.now()}.${ext}`;
+      const {data,error}=await db.storage.from('profiles').upload(path,buffer,{contentType:match[1],upsert:true,cacheControl:'3600'});
+      if(error)throw error;
+      const {data:{publicUrl}}=db.storage.from('profiles').getPublicUrl(data.path);
+      return response(res,200,{ok:true,url:publicUrl});
+    }
     if(action==='save-profile') {
       await saveOwn(db,tg.id,req.body.profile||{});
-      return response(res,200,{ok:true,profile:await readProfile(db,tg.id)});
-    }
-    if(action==='public-profile') {
-      const username=txt(req.body.username,64).replace(/^@/,'').toLowerCase();
-      if(!username)return response(res,400,{error:'Введи username BIOX.'});
-      const {data:target,error}=await db.from('users').select('id,username,role,vip_expires').eq('username',username).maybeSingle();
-      if(error)throw error;if(!target)return response(res,404,{error:'Пользователь не найден.'});
-      return response(res,200,{profile:{...(await readProfile(db,String(target.id))),role:target.role,vipExpires:target.vip_expires,telegramUsername:target.username}});
+      const saved=await readProfile(db,tg.id); const slug=String(saved.username||'').replace(/^@/,'').trim(); const publicUrl=slug ? `${(process.env.PUBLIC_SITE_URL||'https://biox-lac.vercel.app').replace(/\/$/,'')}/?bio=${encodeURIComponent(slug)}` : null;
+      return response(res,200,{ok:true,profile:saved,publicUrl});
     }
     if(action==='owner-update') {
       if(tg.id!==OWNER_ID)return response(res,403,{error:'Только владелец BIOX может выдавать VIP и бейджи.'});
