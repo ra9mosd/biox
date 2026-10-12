@@ -1,364 +1,159 @@
-import { useEffect, useMemo, useState } from "react";
-import { uploadImage, saveProfile, ensureUser, loadMyProfile, loadProfileByUsername } from "./lib/api";
-import "./App.css";
+import { useEffect, useState } from 'react';
+import './App.css';
+import { bootstrap, saveProfile, loadProfileByUsername, ownerUpdateUser } from './lib/api';
 
-const OWNER_ID = 8787840086;
-
-const defaultProfile = {
-  name: "",
-  bio: "",
-  avatar: "",
-  banner: "",
-  background: "",
-  accent: "#8b5cf6",
-  effect: "aurora",
-  music: "",
-  musicTitle: "BIOX MUSIC",
-  links: [],
-  badges: [],
+const EMPTY = {
+  name: '', username: '', bio: '', avatar: '', banner: '', background: '',
+  accent: '#8b5cf6', effect: 'aurora', music: '', musicTitle: 'BIOX MUSIC',
+  links: [], badges: []
 };
+const BADGE_OPTIONS = ['verified', 'vip', 'sponsor', 'founder', 'pro', 'creator', 'developer', 'og', 'early', 'staff'];
 
-const badgeOptions = ["VERIFIED", "VIP", "SPONSOR", "FOUNDER", "PRO", "CREATOR", "DEVELOPER", "OG", "EARLY", "STAFF"];
-
-const badgeInfo = {
-  VERIFIED: { label: "Verified", className: "verified" },
-  VIP: { label: "VIP", className: "vip" },
-  SPONSOR: { label: "Sponsor", className: "sponsor" },
-  FOUNDER: { label: "Founder", className: "founder" },
-  PRO: { label: "Pro", className: "pro" },
-  CREATOR: { label: "Creator", className: "creator" },
-  DEVELOPER: { label: "Developer", className: "developer" },
-  OG: { label: "OG", className: "og" },
-  EARLY: { label: "Early", className: "early" },
-  STAFF: { label: "Staff", className: "staff" },
-};
-
-function normalizeUrl(url) {
-  if (!url) return "#";
-  if (/^https?:\/\//i.test(url)) return url;
-  return `https://${url}`;
-}
-
-function BadgeIcon({ type }) {
-  const common = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" };
-  switch (type) {
-    case "VERIFIED":
-      return (<svg {...common}><path d="M12 2.7 14.1 4l2.45-.05 1.2 2.12 2.12 1.2-.05 2.45L21.3 12l-1.48 2.28.05 2.45-2.12 1.2-1.2 2.12-2.45-.05L12 21.3l-2.28-1.48-2.45.05-1.2-2.12-2.12-1.2.05-2.45L2.7 12l1.3-2.28-.05-2 .45 2.12-1.2 1.2-2.12L9.72 4 12 2.7Z" fill="currentColor" /><path d="m8.1 12.2 2.45 2.35 5.35-5.2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>);
-    case "VIP":
-      return (<svg {...common}><path d="m12 2.8 2.55 5.35 5.9.86-4.27 4.16 1 5.87L12 16.28l-5.18 2.76 1-5.87L3.55 9l5.9-.86L12 2.8Z" fill="currentColor" /></svg>);
-    case "SPONSOR":
-      return (<svg {...common}><path d="m12 2.5 7.4 9.5-7.4 9.5L4.6 12 12 2.5Z" fill="currentColor" /><path d="m12 6.8 4.1 5.2-4.1 5.2L7.9 12 12 6.8Z" fill="rgba(255,255,255,.45)" /></svg>);
-    case "FOUNDER":
-      return (<svg {...common}><path d="m3.2 7.2 4.25 3.05L12 4l4.55 6.25L20.8 7.2l-1.55 11.3H4.75L3.2 7.2Z" fill="currentColor" /><path d="M5.2 20h13.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>);
-    case "PRO":
-      return (<svg {...common}><path d="m13.5 2-8 11h5.2L10 22l8.5-12h-5.15L13.5 2Z" fill="currentColor" /></svg>);
-    case "CREATOR":
-      return (<svg {...common}><path d="m12 2 1.65 6.35L20 10l-6.35 1.65L12 18l-1.65-6.35L4 10l6.35-1.65L12 2Z" fill="currentColor" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" fill="currentColor" /></svg>);
-    case "DEVELOPER":
-      return (<svg {...common}><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4l-3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>);
-    case "OG":
-      return (<svg {...common}><path d="M14.2 3.1c.4 3.1-1.3 4.3-2.8 5.6-1.1.95-1.9 1.8-1.9 3.3 0 1.1.6 2.1 1.6 2.7-.15-1.6.7-2.55 1.75-3.5 1.35-1.2 3.15-2.65 3.15-5.4 2.15 1.8 4.05 4.5 4.05 7.6 0 4.25-3.3 7.5-7.95 7.5S4.05 17.7 4.05 13.7c0-3.05 1.8-5.85 4.75-8.15-.25 2.25.3 3.7 1.1 4.7.15-2.15 1.25-3.85 4.3-7.15Z" fill="currentColor" /></svg>);
-    case "EARLY":
-      return (<svg {...common}><path d="m12 2.8 7.9 9.2-7.9 9.2L4.1 12 12 2.8Z" fill="currentColor" /><path d="m12 7.4 3.95 4.6-3.95 4.6L8.05 12 12 7.4Z" fill="rgba(255,255,255,.5)" /></svg>);
-    case "STAFF":
-      return (<svg {...common}><path d="M12 2.5 20 6v5.7c0 4.9-3.1 8.1-8 9.8-4.9-1.7-8-4.9-8-9.8V6l8-3.5Z" fill="currentColor" /><path d="m8.5 12 2.2 2.2 4.8-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>);
-    default: return null;
-  }
-}
-
-function Badge({ type }) {
-  const info = badgeInfo[type];
-  if (!info) return null;
-  return (<span className={`profile-badge badge-${info.className}`} title={info.label}><BadgeIcon type={type} /><span className="badge-tooltip">{info.label}</span></span>);
-}
-
-function App() {
-  const [profile, setProfile] = useState(defaultProfile);
+export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("PROFILE");
-  const [saved, setSaved] = useState(false);
+  const [profile, setProfile] = useState(EMPTY);
+  const [tab, setTab] = useState('profile');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [mouse, setMouse] = useState({ x: 50, y: 50 });
-  const [isViewingMode, setIsViewingMode] = useState(false);
+  const [message, setMessage] = useState('');
+  const [lookup, setLookup] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [targetRole, setTargetRole] = useState('vip');
+  const [selectedBadges, setSelectedBadges] = useState([]);
+  const [viewingOwn, setViewingOwn] = useState(true);
 
   useEffect(() => {
-    const init = async () => {
+    let live = true;
+    (async () => {
       try {
-        const tg = window.Telegram?.WebApp;
-        let tgUser = tg?.initDataUnsafe?.user;
-        const startParam = tg?.initDataUnsafe?.start_param;
-        const isViewingProfile = startParam && startParam.length > 0;
-
-        if (!tgUser || !tgUser.id) {
-          const localId = "local_" + Math.random().toString(36).substr(2, 9);
-          tgUser = {
-            id: localId,
-            username: null,
-            first_name: "",
-            last_name: "",
-            photo_url: "",
-          };
-        }
-
-        console.log("👤 User:", tgUser);
-
-        if (isViewingProfile) {
-          console.log("👀 Открываем профиль:", startParam);
-          const publicProfile = await loadProfileByUsername(startParam);
-          if (publicProfile) {
-            setProfile({
-              name: publicProfile.name || "User",
-              bio: publicProfile.bio || "",
-              avatar: publicProfile.avatar_url || "",
-              banner: publicProfile.banner_url || "",
-              background: publicProfile.background_url || "",
-              accent: publicProfile.accent || defaultProfile.accent,
-              effect: publicProfile.effect || defaultProfile.effect,
-              music: publicProfile.music_url || "",
-              musicTitle: publicProfile.music_title || defaultProfile.musicTitle,
-              links: publicProfile.links.length > 0 ? publicProfile.links.map(l => ({ name: l.name, url: l.url })) : [],
-              badges: publicProfile.badges.length > 0 ? publicProfile.badges : [],
-            });
-            setIsViewingMode(true);
-            setLoading(false);
-            return;
-          }
-        }
-
-        const user = await ensureUser(tgUser);
-        console.log("✅ Пользователь в БД:", user);
-        setCurrentUser(user);
-
-        const savedProfile = await loadMyProfile(user.id);
-        console.log("📦 Загруженный профиль:", savedProfile);
-        
-        if (savedProfile) {
-          setProfile({
-            name: savedProfile.name || "",
-            bio: savedProfile.bio || "",
-            avatar: savedProfile.avatar_url || tgUser.photo_url || "",
-            banner: savedProfile.banner_url || "",
-            background: savedProfile.background_url || "",
-            accent: savedProfile.accent || defaultProfile.accent,
-            effect: savedProfile.effect || defaultProfile.effect,
-            music: savedProfile.music_url || "",
-            musicTitle: savedProfile.music_title || defaultProfile.musicTitle,
-            links: savedProfile.links.length > 0 ? savedProfile.links.map(l => ({ name: l.name, url: l.url })) : [],
-            badges: savedProfile.badges.length > 0 ? savedProfile.badges : [],
-          });
-        } else {
-          setProfile({
-            ...defaultProfile,
-          });
-        }
-      } catch (error) {
-        console.error("❌ Ошибка инициализации:", error);
+        const result = await bootstrap();
+        if (!live) return;
+        setCurrentUser(result.user);
+        setProfile({ ...EMPTY, ...result.profile, links: result.profile?.links || [], badges: result.profile?.badges || [] });
+      } catch (e) {
+        if (live) setMessage(e.message || 'Не удалось загрузить пользователя');
       } finally {
-        setLoading(false);
+        if (live) setLoading(false);
       }
-    };
-    init();
+    })();
+    try { window.Telegram?.WebApp?.ready(); window.Telegram?.WebApp?.expand(); } catch {}
+    return () => { live = false; };
   }, []);
 
-  useEffect(() => {
-    const move = (event) => setMouse({ x: (event.clientX / window.innerWidth) * 100, y: (event.clientY / window.innerHeight) * 100 });
-    window.addEventListener("mousemove", move);
-    return () => window.removeEventListener("mousemove", move);
-  }, []);
+  const isOwner = currentUser?.id === '8787840086' && currentUser?.role === 'owner';
+  const setField = (key, value) => setProfile(p => ({ ...p, [key]: value }));
+  const notify = (text) => { setMessage(text); window.setTimeout(() => setMessage(''), 4500); };
 
-  const backgroundStyle = useMemo(() => profile.background ? { backgroundImage: `url(${profile.background})` } : {}, [profile.background]);
-  const update = (field, value) => setProfile(c => ({ ...c, [field]: value }));
-
-  const uploadFile = async (field, file) => {
-    if (!file || !currentUser) { alert("Пользователь не загружен"); return; }
-    if (file.size > 15 * 1024 * 1024) { alert("Максимум 15 MB"); return; }
-    const originalValue = profile[field];
-    update(field, "loading...");
-    try {
-      const publicUrl = await uploadImage(file, currentUser.id, field);
-      update(field, publicUrl);
-    } catch (error) {
-      console.error("❌ Ошибка загрузки:", error);
-      alert("Ошибка загрузки: " + error.message);
-      update(field, originalValue);
-    }
-  };
-
-  const addLink = () => setProfile(c => ({ ...c, links: [...c.links, { name: "New link", url: "https://" }] }));
-  const updateLink = (i, f, v) => setProfile(c => ({ ...c, links: c.links.map((l, idx) => idx === i ? { ...l, [f]: v } : l) }));
-  const removeLink = (i) => setProfile(c => ({ ...c, links: c.links.filter((_, idx) => idx !== i) }));
-  const toggleBadge = (b) => setProfile(c => ({ ...c, badges: c.badges.includes(b) ? c.badges.filter(x => x !== b) : [...c.badges, b] }));
-
-  const handleSave = async () => {
-    if (!currentUser) { alert("Пользователь не загружен!"); return; }
+  async function handleSave(e) {
+    e?.preventDefault();
     setSaving(true);
     try {
-      await saveProfile(currentUser.id, profile);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
-    } catch (error) {
-      console.error("❌ Ошибка сохранения:", error);
-      alert("Ошибка сохранения: " + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetProfile = () => { if (window.confirm("Сбросить BIOX профиль?")) setProfile(defaultProfile); };
-
-  if (loading) {
-    return (<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#fff", fontFamily: "Inter", background: "#050505" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "20px" }}>⚡</div><div style={{ fontSize: "24px", fontWeight: "800" }}>BIO<span style={{ color: "#8b5cf6" }}>X</span></div><div style={{ fontSize: "12px", color: "#666", marginTop: "10px", letterSpacing: "2px" }}>ЗАГРУЗКА...</div></div></div>);
+      const result = await saveProfile(profile);
+      setProfile(p => ({ ...p, ...result.profile }));
+      notify('Профиль сохранён');
+    } catch (e) { notify(e.message || 'Ошибка сохранения'); }
+    finally { setSaving(false); }
   }
 
-  const tabs = ["PROFILE", "LINKS", "APPEARANCE", "BADGES"];
-  const isOwner = Number(currentUser?.id) === Number(OWNER_ID);
+  async function findProfile(e) {
+    e.preventDefault();
+    try {
+      const result = await loadProfileByUsername(lookup);
+      const p = result.profile;
+      setProfile({ ...EMPTY, ...p, links: p.links || [], badges: p.badges || [] });
+      setViewingOwn(false);
+      notify('Профиль загружен');
+    } catch (e) { notify(e.message || 'Профиль не найден'); }
+  }
 
-  return (
-    <div className={`app effect-${profile.effect}`} style={{ "--accent": profile.accent, "--mx": `${mouse.x}%`, "--my": `${mouse.y}%` }}>
-      <div className="background-image" style={backgroundStyle} />
-      <div className="aura aura-one" />
-      <div className="aura aura-two" />
-      <div className="cursor-light" />
-      <div className="grain" />
-      <div className="grid-overlay" />
-      <header className="topbar">
-        <div className="brand"><span>BIO</span>X</div>
-        <div className="top-status">
-          <span className="status-dot" />
-          {isViewingMode ? "PUBLIC PROFILE" : (isOwner ? "OWNER MODE" : "CLOUD PROFILE")}
+  async function manageRole() {
+    try {
+      await ownerUpdateUser({ targetId: targetId.trim(), role: targetRole });
+      notify('Роль пользователя обновлена');
+    } catch (e) { notify(e.message || 'Не удалось изменить роль'); }
+  }
+
+  async function manageBadges() {
+    try {
+      await ownerUpdateUser({ targetId: targetId.trim(), badges: selectedBadges });
+      notify('Бейджи пользователя обновлены');
+    } catch (e) { notify(e.message || 'Не удалось обновить бейджи'); }
+  }
+
+  function addLink() { setField('links', [...(profile.links || []), { name: '', url: '' }]); }
+  function updateLink(index, key, value) {
+    setField('links', (profile.links || []).map((link, i) => i === index ? { ...link, [key]: value } : link));
+  }
+  function removeLink(index) { setField('links', (profile.links || []).filter((_, i) => i !== index)); }
+
+  if (loading) return <main className="screen"><div className="loader"></div><p>Загружаем BIOX…</p></main>;
+
+  if (!currentUser) return <main className="screen"><section className="error-card"><div className="logo">BIOX<span>.</span></div><h1>Открой через Telegram</h1><p>{message || 'Пользователь не загружен. Открой Mini App через кнопку своего Telegram-бота.'}</p><small>Проверь TELEGRAM_BOT_TOKEN и переменные окружения Vercel.</small></section></main>;
+
+  return <main className="app-shell">
+    <header className="topbar">
+      <div className="logo">BIOX<span>.</span></div>
+      <div className="top-user"><span className={`role-dot ${currentUser.role}`}></span>{currentUser.role === 'owner' ? 'OWNER' : currentUser.role === 'vip' ? 'VIP' : 'USER'}</div>
+    </header>
+    <section className="hero">
+      <div className="hero-copy"><div className="eyebrow">YOUR SPACE · YOUR RULES</div><h1>Собери свой<br/><span>цифровой профиль.</span></h1><p>Твой стиль, ссылки и оформление — в одном месте.</p></div>
+      <div className="hero-orb"></div>
+    </section>
+    {!viewingOwn && <button className="back-button" onClick={() => { setViewingOwn(true); bootstrap().then(r => setProfile({ ...EMPTY, ...r.profile, links: r.profile.links || [], badges: r.profile.badges || [] })).catch(e => notify(e.message)); }}>← Вернуться к своему профилю</button>}
+    <section className="workspace">
+      <div className="editor">
+        <div className="section-heading"><div><span className="eyebrow">PROFILE STUDIO</span><h2>{viewingOwn ? 'Редактор профиля' : 'Просмотр профиля'}</h2></div><span className="live-pill"><i/> LIVE</span></div>
+        {viewingOwn && <nav className="tabs">
+          {['profile','links','appearance','badges'].map(t => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{({profile:'PROFILE',links:'LINKS',appearance:'LOOKS',badges:'BADGES'})[t]}</button>)}
+        </nav>}
+        {!viewingOwn ? <div className="read-only-note">Это публичный профиль. Редактировать его может только владелец аккаунта.</div> : <form onSubmit={handleSave} className="form-content">
+          {tab === 'profile' && <>
+            <label>Отображаемое имя<input value={profile.name || ''} onChange={e => setField('name', e.target.value)} placeholder="Например, pasha" maxLength={80}/></label>
+            <label>Username BIOX<input value={profile.username || ''} onChange={e => setField('username', e.target.value)} placeholder="@username" maxLength={64}/><small>Это ник в BIOX, не Telegram username.</small></label>
+            <label>Описание<textarea value={profile.bio || ''} onChange={e => setField('bio', e.target.value)} placeholder="Расскажи о себе…" rows={3} maxLength={500}/></label>
+            <label>Ссылка на аватар<input value={profile.avatar || ''} onChange={e => setField('avatar', e.target.value)} placeholder="https://…"/></label>
+            <label>Ссылка на баннер<input value={profile.banner || ''} onChange={e => setField('banner', e.target.value)} placeholder="https://…"/></label>
+          </>}
+          {tab === 'links' && <div className="links-editor"><div className="inline-heading"><h3>Твои ссылки</h3><button type="button" className="secondary small" onClick={addLink}>＋ Добавить</button></div>
+            {(profile.links || []).map((link, i) => <div className="link-row" key={i}><input aria-label="Название ссылки" value={link.name || ''} onChange={e => updateLink(i,'name',e.target.value)} placeholder="Telegram / VK"/><input aria-label="URL ссылки" value={link.url || ''} onChange={e => updateLink(i,'url',e.target.value)} placeholder="https://…"/><button type="button" className="remove" onClick={() => removeLink(i)}>×</button></div>)}
+            {!profile.links?.length && <p className="muted">Пока ссылок нет. Добавь первую.</p>}
+          </div>}
+          {tab === 'appearance' && <>
+            <label>Цвет акцента<div className="color-line"><input type="color" value={profile.accent || '#8b5cf6'} onChange={e => setField('accent',e.target.value)}/><input value={profile.accent || '#8b5cf6'} onChange={e => setField('accent',e.target.value)} maxLength={7}/></div></label>
+            <label>Эффект<select value={profile.effect || 'aurora'} onChange={e => setField('effect',e.target.value)}><option value="aurora">Aurora</option><option value="glow">Glow</option><option value="matrix">Matrix</option><option value="none">Без эффекта</option></select></label>
+            <label>Ссылка на фон<input value={profile.background || ''} onChange={e => setField('background',e.target.value)} placeholder="https://…"/></label>
+            <label>Ссылка на музыку<input value={profile.music || ''} onChange={e => setField('music',e.target.value)} placeholder="https://…"/></label>
+            <label>Название музыки<input value={profile.musicTitle || ''} onChange={e => setField('musicTitle',e.target.value)} placeholder="BIOX MUSIC"/></label>
+          </>}
+          {tab === 'badges' && <div className="owner-warning"><span className="lock">⌑</span><h3>Бейджи управляются владельцем</h3><p>Пользователь не может выдавать себе бейджи. Если нужен новый бейдж — обратись к владельцу BIOX.</p></div>}
+          <button className="primary save-button" type="submit" disabled={saving}>{saving ? 'Сохраняем…' : 'Сохранить профиль'} <span>↗</span></button>
+        </form>}
+      </div>
+      <aside className="preview-panel">
+        <div className="section-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>Твой BIO</h2></div><span className="preview-star">✳</span></div>
+        <div className={`profile-card effect-${profile.effect || 'aurora'}`} style={{'--accent':profile.accent || '#8b5cf6', backgroundImage: profile.background ? `linear-gradient(180deg,rgba(10,10,18,.12),#101018 75%),url("${profile.background}")` : undefined}}>
+          <div className="card-banner" style={profile.banner ? {backgroundImage:`url("${profile.banner}")`} : {}}></div>
+          <div className="avatar-wrap">{profile.avatar ? <img src={profile.avatar} alt="Аватар" onError={e => {e.currentTarget.style.display='none';}}/> : <span>{(profile.name || 'B').slice(0,1).toUpperCase()}</span>}</div>
+          <div className="card-main"><div className="name-row"><h3>{profile.name || 'Твоё имя'}</h3>{(profile.badges || []).map(b => <span key={b} className={`badge badge-${b}`}>{b === 'verified' ? '✓' : b.toUpperCase()}</span>)}</div><div className="handle">{profile.username || '@username'}</div><p className="bio-text">{profile.bio || 'Твоё описание появится здесь. Добавь немного себя.'}</p>
+            <div className="preview-links">{(profile.links || []).filter(l => l.name && l.url).map((l,i) => <a key={i} href={l.url} target="_blank" rel="noreferrer">{l.name}<span>↗</span></a>)}</div>
+            {profile.musicTitle && <div className="music-chip">♫ <span>{profile.musicTitle}</span></div>}
+          </div><div className="card-footer"><span>BIOX PROFILE</span><span>✦ 001</span></div>
         </div>
-        {!isViewingMode && (
-          <button className="save-top" onClick={handleSave} disabled={saving}>{saving ? "SAVING..." : saved ? "SAVED ✓" : "SAVE PROFILE"}</button>
-        )}
-      </header>
-      {!isViewingMode && (
-        <main className="workspace">
-          <section className="editor">
-            <div className="editor-heading">
-              <div><div className="eyebrow">PROFILE BUILDER / 01</div><h1>CREATE<br />YOUR <span>BIOX</span></h1></div>
-              <button className="reset-button" onClick={resetProfile}>RESET</button>
-            </div>
-            <div className="tabs">{tabs.map(t => <button key={t} className={activeTab === t ? "active" : ""} onClick={() => setActiveTab(t)}>{t}</button>)}</div>
-            <div className="panel">
-              {activeTab === "PROFILE" && <>
-                <div className="panel-title"><span>01</span>PROFILE</div>
-                <div className="avatar-upload">
-                  <label className="avatar-drop">
-                    {profile.avatar && profile.avatar !== "loading..." ? <img src={profile.avatar} alt="avatar" /> : <div className="upload-plus">{profile.avatar === "loading..." ? "..." : "+"}</div>}
-                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={e => uploadFile("avatar", e.target.files[0])} />
-                  </label>
-                  <div><strong>AVATAR</strong><span>PNG / JPG / GIF</span><span>MAX 15 MB</span></div>
-                </div>
-                <label className="field"><span>DISPLAY NAME</span><input value={profile.name} onChange={e => update("name", e.target.value)} placeholder="Your name" /></label>
-                <label className="field"><span>BIO</span><textarea value={profile.bio} onChange={e => update("bio", e.target.value)} placeholder="Tell something about yourself..." /></label>
-              </>}
-              {activeTab === "LINKS" && <>
-                <div className="panel-title"><span>02</span>CUSTOM LINKS</div>
-                <p className="panel-description">Добавляй сколько угодно ссылок.</p>
-                <div className="links-editor">
-                  {profile.links.map((link, i) => <div className="link-row" key={i}>
-                    <div className="link-number">{String(i + 1).padStart(2, "0")}</div>
-                    <input value={link.name} onChange={e => updateLink(i, "name", e.target.value)} placeholder="Link name" />
-                    <input value={link.url} onChange={e => updateLink(i, "url", e.target.value)} placeholder="https://..." />
-                    <button onClick={() => removeLink(i)}>×</button>
-                  </div>)}
-                </div>
-                <button className="add-button" onClick={addLink}><span>+</span>ADD NEW LINK</button>
-              </>}
-              {activeTab === "APPEARANCE" && <>
-                <div className="panel-title"><span>03</span>AURA APPEARANCE</div>
-                <label className="upload-wide"><div><strong>BANNER</strong><span>IMAGE / GIF · MAX 15 MB</span></div><span className="upload-action">{profile.banner === "loading..." ? "..." : "UPLOAD"}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={e => uploadFile("banner", e.target.files[0])} /></label>
-                <label className="upload-wide"><div><strong>BACKGROUND</strong><span>IMAGE / GIF · MAX 15 MB</span></div><span className="upload-action">{profile.background === "loading..." ? "..." : "UPLOAD"}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={e => uploadFile("background", e.target.files[0])} /></label>
-                <div className="appearance-grid">
-                  <div className="appearance-block"><span className="field-title">ACCENT COLOR</span><div className="color-picker"><input type="color" value={profile.accent} onChange={e => update("accent", e.target.value)} /><input value={profile.accent} onChange={e => update("accent", e.target.value)} /></div></div>
-                  <div className="appearance-block"><span className="field-title">AMBIENT EFFECT</span><select value={profile.effect} onChange={e => update("effect", e.target.value)}><option value="none">NONE</option><option value="aurora">AURA</option><option value="particles">PARTICLES</option><option value="stars">STARS</option><option value="grid">GRID</option><option value="matrix">MATRIX</option></select></div>
-                </div>
-                <label className="field"><span>MUSIC URL</span><input value={profile.music} onChange={e => update("music", e.target.value)} placeholder="https://example.com/music.mp3" /></label>
-                <label className="field"><span>TRACK TITLE</span><input value={profile.musicTitle} onChange={e => update("musicTitle", e.target.value)} placeholder="My track" /></label>
-              </>}
-              {activeTab === "BADGES" && <>
-                <div className="panel-title"><span>04</span>BADGES</div>
-                <p className="panel-description">Выбирай бейджи.</p>
-                <div className="badge-selector">
-                  {badgeOptions.map(badge => {
-                    const active = profile.badges.includes(badge);
-                    const info = badgeInfo[badge];
-                    return <button key={badge} className={`badge-choice ${active ? "selected" : ""}`} onClick={() => toggleBadge(badge)}><span className={`choice-icon badge-${info.className}`}><BadgeIcon type={badge} /></span><span>{info.label}</span>{active && <b>✓</b>}</button>;
-                  })}
-                </div>
-              </>}
-            </div>
-          </section>
-          <section className="preview-area">
-            <div className="preview-heading"><span>LIVE PREVIEW</span><span>REALTIME / AURA</span></div>
-            <div className="profile-card-wrap">
-              <div className="profile-card">
-                <div className="profile-banner" style={profile.banner && profile.banner !== "loading..." ? { backgroundImage: `url(${profile.banner})` } : {}}>
-                  {(!profile.banner || profile.banner === "loading...") && <><div className="banner-orb orb-one" /><div className="banner-orb orb-two" /><div className="banner-lines" /></>}
-                  <div className="banner-overlay" />
-                </div>
-                <div className="profile-body">
-                  <div className="profile-avatar">
-                    {profile.avatar && profile.avatar !== "loading..." ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</div>}
-                  </div>
-                  <div className="profile-info">
-                    <div className="name-line"><h2>{profile.name || "Your Name"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
-                    <p className="profile-bio">{profile.bio || "Your bio goes here"}</p>
-                  </div>
-                  <div className="profile-divider" />
-                  <div className="preview-links">{profile.links.map((link, i) => <a key={`${link.name}-${i}`} href={normalizeUrl(link.url)} target="_blank" rel="noreferrer" className="preview-link"><span className="link-icon">{link.name?.charAt(0)?.toUpperCase() || ""}</span><span>{link.name || "Link"}</span><span className="link-arrow">↗</span></a>)}</div>
-                  {profile.music && <div className="music-player"><div className="music-top"><div className="music-icon">♫</div><div><span>NOW PLAYING</span><strong>{profile.musicTitle || "BIOX MUSIC"}</strong></div><div className="music-pulse"><i /><i /><i /><i /><i /></div></div><audio controls src={profile.music} /></div>}
-                  <div className="profile-footer"><span>BIOX</span><span>PERSONAL DIGITAL IDENTITY</span></div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </main>
-      )}
-      {isViewingMode && (
-        <main style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 70px)", padding: "40px 20px" }}>
-          <div className="profile-card">
-            <div className="profile-banner" style={profile.banner ? { backgroundImage: `url(${profile.banner})` } : {}}>
-              {!profile.banner && (<><div className="banner-orb orb-one" /><div className="banner-orb orb-two" /><div className="banner-lines" /></>)}
-              <div className="banner-overlay" />
-            </div>
-            <div className="profile-body">
-              <div className="profile-avatar">
-                {profile.avatar ? <img src={profile.avatar} alt="avatar" /> : <div className="avatar-placeholder">{profile.name?.charAt(0)?.toUpperCase() || "?"}</div>}
-              </div>
-              <div className="profile-info">
-                <div className="name-line"><h2>{profile.name || "User"}</h2><div className="profile-badges">{profile.badges.map(b => <Badge key={b} type={b} />)}</div></div>
-                <p className="profile-bio">{profile.bio || ""}</p>
-              </div>
-              <div className="profile-divider" />
-              <div className="preview-links">
-                {profile.links.map((link, i) => (
-                  <a key={i} href={normalizeUrl(link.url)} target="_blank" rel="noreferrer" className="preview-link">
-                    <span className="link-icon">{link.name?.charAt(0)?.toUpperCase() || "↗"}</span>
-                    <span>{link.name || "Link"}</span>
-                    <span className="link-arrow">↗</span>
-                  </a>
-                ))}
-              </div>
-              {profile.music && (
-                <div className="music-player">
-                  <div className="music-top">
-                    <div className="music-icon">♫</div>
-                    <div><span>NOW PLAYING</span><strong>{profile.musicTitle || "BIOX MUSIC"}</strong></div>
-                    <div className="music-pulse"><i /><i /><i /><i /><i /></div>
-                  </div>
-                  <audio controls src={profile.music} />
-                </div>
-              )}
-              <div className="profile-footer"><span>BIOX</span><span>BUILD YOUR IDENTITY</span></div>
-            </div>
-          </div>
-        </main>
-      )}
-      <div className="bottom-line"><span>BIOX / AURA SYSTEM</span><span>BUILD YOUR IDENTITY</span></div>
-    </div>
-  );
+        <div className="preview-foot"><span>✦</span> Изменения отобразятся здесь до сохранения.</div>
+      </aside>
+    </section>
+    {isOwner && <section className="owner-panel">
+      <div className="section-heading"><div><span className="eyebrow">RESTRICTED ACCESS</span><h2>Панель владельца</h2></div><span className="owner-label">OWNER MODE</span></div>
+      <p className="muted">Только владелец может менять роль и бейджи. Укажи Telegram ID пользователя.</p>
+      <div className="owner-grid">
+        <label>Telegram ID пользователя<input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="Например, 123456789"/></label>
+        <label>Роль<select value={targetRole} onChange={e => setTargetRole(e.target.value)}><option value="free">USER / FREE</option><option value="vip">VIP</option><option value="owner">OWNER</option></select></label>
+        <button className="primary" onClick={manageRole}>Применить роль</button>
+      </div>
+      <div className="badge-manager"><h3>Выдать бейджи</h3><div className="badge-options">{BADGE_OPTIONS.map(b => <label key={b} className={`badge-option ${selectedBadges.includes(b)?'selected':''}`}><input type="checkbox" checked={selectedBadges.includes(b)} onChange={e => setSelectedBadges(old => e.target.checked ? [...old,b] : old.filter(x => x !== b))}/>{b}</label>)}</div><button className="secondary" onClick={manageBadges}>Сохранить бейджи пользователя</button></div>
+      <form className="lookup-form" onSubmit={findProfile}><label>Открыть био по BIOX username<input value={lookup} onChange={e => setLookup(e.target.value)} placeholder="@username"/></label><button className="secondary" type="submit">Найти профиль</button></form>
+    </section>}
+    {message && <div className="toast">{message}</div>}
+    <footer className="footer"><span>BIOX<span className="accent-dot">.</span></span><span>YOUR SPACE. YOUR RULES.</span></footer>
+  </main>;
 }
-
-export default App;
