@@ -21,17 +21,33 @@ export default function App() {
   const [targetRole, setTargetRole] = useState('vip');
   const [selectedBadges, setSelectedBadges] = useState([]);
   const [viewingOwn, setViewingOwn] = useState(true);
+  const [browserMode, setBrowserMode] = useState(false);
 
   useEffect(() => {
     let live = true;
     (async () => {
       try {
+        const hasTelegram = Boolean(window.Telegram?.WebApp?.initData);
+        if (!hasTelegram) {
+          const saved = JSON.parse(localStorage.getItem('biox-profile') || 'null');
+          if (!live) return;
+          setBrowserMode(true);
+          setCurrentUser({ id: 'browser-demo', role: 'free', username: '' });
+          setProfile({ ...EMPTY, ...(saved || {}), links: saved?.links || [], badges: [] });
+          return;
+        }
         const result = await bootstrap();
         if (!live) return;
         setCurrentUser(result.user);
         setProfile({ ...EMPTY, ...result.profile, links: result.profile?.links || [], badges: result.profile?.badges || [] });
       } catch (e) {
-        if (live) setMessage(e.message || 'Не удалось загрузить пользователя');
+        if (live) {
+          const saved = JSON.parse(localStorage.getItem('biox-profile') || 'null');
+          setBrowserMode(true);
+          setCurrentUser({ id: 'browser-demo', role: 'free', username: '' });
+          setProfile({ ...EMPTY, ...(saved || {}), links: saved?.links || [], badges: [] });
+          setMessage('Браузерный режим: изменения сохраняются только на этом устройстве.');
+        }
       } finally {
         if (live) setLoading(false);
       }
@@ -48,9 +64,16 @@ export default function App() {
     e?.preventDefault();
     setSaving(true);
     try {
-      const result = await saveProfile(profile);
-      setProfile(p => ({ ...p, ...result.profile }));
-      notify('Профиль сохранён');
+      if (browserMode) {
+        const localProfile = { ...profile, badges: [] };
+        localStorage.setItem('biox-profile', JSON.stringify(localProfile));
+        setProfile(localProfile);
+        notify('Профиль сохранён на этом устройстве');
+      } else {
+        const result = await saveProfile(profile);
+        setProfile(p => ({ ...p, ...result.profile }));
+        notify('Профиль сохранён');
+      }
     } catch (e) { notify(e.message || 'Ошибка сохранения'); }
     finally { setSaving(false); }
   }
@@ -88,13 +111,12 @@ export default function App() {
 
   if (loading) return <main className="screen"><div className="loader"></div><p>Загружаем BIOX…</p></main>;
 
-  if (!currentUser) return <main className="screen"><section className="error-card"><div className="logo">BIOX<span>.</span></div><h1>Открой через Telegram</h1><p>{message || 'Пользователь не загружен. Открой Mini App через кнопку своего Telegram-бота.'}</p><small>Проверь TELEGRAM_BOT_TOKEN и переменные окружения Vercel.</small></section></main>;
-
   return <main className="app-shell">
     <header className="topbar">
       <div className="logo">BIOX<span>.</span></div>
-      <div className="top-user"><span className={`role-dot ${currentUser.role}`}></span>{currentUser.role === 'owner' ? 'OWNER' : currentUser.role === 'vip' ? 'VIP' : 'USER'}</div>
+      <div className="top-user"><span className={`role-dot ${currentUser.role}`}></span>{browserMode ? 'BROWSER PREVIEW' : currentUser.role === 'owner' ? 'OWNER' : currentUser.role === 'vip' ? 'VIP' : 'USER'}</div>
     </header>
+    {browserMode && <div className="browser-notice">Режим браузера: профиль можно редактировать и сохранять локально. Для синхронизации и панели владельца открой BIOX через Telegram.</div>}
     <section className="hero">
       <div className="hero-copy"><div className="eyebrow">YOUR SPACE · YOUR RULES</div><h1>Собери свой<br/><span>цифровой профиль.</span></h1><p>Твой стиль, ссылки и оформление — в одном месте.</p></div>
       <div className="hero-orb"></div>
